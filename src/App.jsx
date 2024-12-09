@@ -5,6 +5,7 @@ const App = () => {
   const [tasks, setTasks] = useState([]);
   const [taskInput, setTaskInput] = useState("");
   const [priority, setPriority] = useState("Medium");
+  const [deadline, setDeadline] = useState("");
   const [darkMode, setDarkMode] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingIndex, setEditingIndex] = useState(null);
@@ -13,11 +14,61 @@ const App = () => {
     document.body.className = darkMode ? "dark" : "light";
   }, [darkMode]);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = new Date();
+      tasks.forEach((task, index) => {
+        if (
+          task.deadline &&
+          new Date(task.deadline) <= now &&
+          !task.completed &&
+          !task.notified
+        ) {
+          showNotification(task.text, index);
+        }
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [tasks]);
+
+  const requestNotificationPermission = () => {
+    if ("Notification" in window) {
+      Notification.requestPermission().then((permission) => {
+        if (permission !== "granted") {
+          console.log("Notification permission denied.");
+        }
+      });
+    }
+  };
+
+  const showNotification = (taskText, index) => {
+    if (Notification.permission === "granted") {
+      new Notification("Task Deadline", {
+        body: `Deadline approaching: ${taskText}`,
+      });
+
+      setTasks((prevTasks) =>
+        prevTasks.map((task, i) =>
+          i === index ? { ...task, notified: true } : task
+        )
+      );
+    }
+  };
+
   const handleAddTask = () => {
     if (taskInput.trim()) {
-      const newTask = { text: taskInput, priority, completed: false, updated: false };
+      const newTask = {
+        text: taskInput,
+        priority,
+        deadline,
+        completed: false,
+        notified: false,
+        updated: false,
+      };
       setTasks((prevTasks) => sortTasks([...prevTasks, newTask]));
       setTaskInput("");
+      setDeadline("");
     }
   };
 
@@ -25,6 +76,7 @@ const App = () => {
     const taskToEdit = tasks[index];
     setTaskInput(taskToEdit.text);
     setPriority(taskToEdit.priority);
+    setDeadline(taskToEdit.deadline);
     setIsEditing(true);
     setEditingIndex(index);
   };
@@ -32,11 +84,12 @@ const App = () => {
   const handleSaveTask = () => {
     const updatedTasks = tasks.map((task, index) =>
       index === editingIndex
-        ? { ...task, text: taskInput, priority, updated: true }
+        ? { ...task, text: taskInput, priority, deadline, updated: true }
         : task
     );
     setTasks(sortTasks(updatedTasks));
     setTaskInput("");
+    setDeadline("");
     setIsEditing(false);
     setEditingIndex(null);
   };
@@ -74,6 +127,9 @@ const App = () => {
           {darkMode ? "☀ Light Mode" : "🌙 Dark Mode"}
         </button>
       </header>
+      <button className="notify-permission-button" onClick={requestNotificationPermission}>
+        Enable Notifications
+      </button>
       <div className="input-container">
         <input
           className="input"
@@ -91,6 +147,12 @@ const App = () => {
           <option value="Medium">Medium</option>
           <option value="Low">Low</option>
         </select>
+        <input
+          className="input"
+          type="datetime-local"
+          value={deadline}
+          onChange={(e) => setDeadline(e.target.value)}
+        />
         {isEditing ? (
           <button className="save-button" onClick={handleSaveTask}>
             Save
@@ -111,7 +173,8 @@ const App = () => {
               onClick={() => toggleTask(index)}
               className={`task-text ${task.completed ? "completed" : ""}`}
             >
-              {task.text} - <span className={`priority-${task.priority.toLowerCase()}`}>{task.priority}</span>
+              {task.text} - <span className={`priority-${task.priority.toLowerCase()}`}>{task.priority}</span> 
+              {task.deadline && <span className="deadline"> | Deadline: {new Date(task.deadline).toLocaleString()}</span>}
             </span>
             <div className="task-buttons">
               <button
